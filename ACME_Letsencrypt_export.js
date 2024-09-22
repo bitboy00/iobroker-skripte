@@ -1,7 +1,7 @@
 // ACME-Letsencrypt-Zertifikate aus iobroker extrahieren und als Dateien speichern.
 
 // Zielverzeichnis für Zertifikate
-const certificatesPath = '/etc/ssl/certs/';  
+const certificatesPath = '/opt/iobroker/certificates/';  
 
 const fs = require('fs');
 const path = require('path');
