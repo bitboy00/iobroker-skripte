@@ -176,21 +176,7 @@ async function processCertificates() {
 // Process certificates once at startup
 processCertificates();
 
-// Schedule the script to run every 24 hours (daily at midnight)
-// Ensure that the 'schedule' function is available in your environment.
-// If using node-cron, you can uncomment and use the following lines:
-
-/*
-const cron = require('node-cron');
-
-// Schedule to run every day at midnight
-cron.schedule('0 0 * * *', () => {
-    processCertificates();
-    log(`Scheduled certificate processing executed.`, 'info');
-});
-*/
-
-// If using ioBroker's schedule function, ensure it's correctly defined and use the following:
+// Process certificates every day at midnight
 schedule("0 0 * * *", function () {
     processCertificates();
     log(`Scheduled certificate processing executed.`, 'info');
