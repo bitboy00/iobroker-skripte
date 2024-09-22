@@ -1,8 +1,11 @@
-# iobroker-skripte
-Skripte zur Nutzung in iobroker
+# iobroker-scripts
+Scripts for use in iobroker
 
 ACME_Letsencrypt_export.js: 
-Wenn mit dem Adapter ACME ein letsencrypt-Zertifikat erzeugt wurde, steht es in IOBROKER einigen Adaptern zur Verfügung.
-viele Adapter und externe Programme (z.B. Grafana) sehen diese Certs aber nicht, weil sie in dem Objekt system/certificates liegen und nicht im Dateisystem.
-Das Skript sucht nach collections von Zertifikaten, die durch ACME angelegt wurden und schreibt die Dateien in das Verzeichnis, welches im Script oben festgelegt wird.
-Danach kann man die Zertifikate - wie gewohnt - in der Zertifikatverwaltung von iobroker verlinken und in anderen Adaptern nutzen, oder auch in unabhängigen Paketen wie Grafana.
+If a letsencrypt certificate has been generated with the ACME adapter, it is available to some adapters in IOBROKER.
+However, many adapters and external programs (e.g. Grafana) do not see these certs because they are stored in the object system/certificates in so-called 
+collections and not in the file system.
+The script searches for collections of certificates created by ACME and writes the files to the directory specified in the script above.
+The file name is [collectionName]_key.pem, [collectionName]_cert.pem and [collectionName]_chain.pem 
+A flag is generated when an existing cert is updated. This can be used to recognize externally whether certain services that depend on it should be restarted. 
+You can then link the certificates - as usual - in the certificate management of iobroker and use them in other adapters or in independent packages such as Grafana.
