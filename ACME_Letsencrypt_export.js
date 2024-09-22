@@ -1,98 +1,147 @@
-// ACME-Letsencrypt-Zertifikate aus iobroker extrahieren und als Dateien speichern.
-
-// Zielverzeichnis für Zertifikate
-const certificatesPath = '/opt/iobroker/certificates/';  
-
-const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const fs = require('fs');  // File system module
 
-// Funktion zum Speichern der Zertifikatsdateien
-async function speichereZertifikate(collectionName, privateKey, publicCert, chainCert) {
+// Directory for certificates
+const certificatesPath = '/opt/iobroker/certificates/';
+// Default path for the restart flag
+const flagPath = path.join(convertPathForWindows(certificatesPath), 'new_ssl_cert.txt');
+
+// Function to convert Unix-style paths to Windows paths
+function convertPathForWindows(p) {
+    if (os.platform() === 'win32' && p.startsWith('/')) {
+        let driveLetter = p.charAt(1).toUpperCase(); // Extract the drive letter
+        let remainingPath = p.slice(2); // Rest of the path
+        return driveLetter + ':' + remainingPath.replace(/\//g, '\\'); // Create Windows-style path
+    }
+    return p; // Return unchanged for Linux paths
+}
+
+// Function to compare the contents of files
+async function compareFileContents(filePath, content) {
     try {
-        // Erstellen des Verzeichnisses, falls es nicht existiert
+        if (!fs.existsSync(filePath)) return false; // File does not exist
+        const existingContent = await fs.promises.readFile(filePath, 'utf8');
+        return existingContent === content; // Return whether the contents are identical
+    } catch (err) {
+        log(`Error comparing file contents: ${err.message}`, 'error');
+        return false;
+    }
+}
+
+// Function to set the restart flag
+function setRestartFlag() {
+    try {
+        // Check if the flag already exists
+        if (fs.existsSync(flagPath)) {
+            log(`Warning: Restart flag already exists: ${flagPath}`, 'warn');
+            return; // Do nothing, the flag is already set
+        }
+
+        // Set the flag as it doesn't exist
+        fs.writeFileSync(flagPath, 'restart', { mode: 0o644 });
+        log(`Restart flag has been set: ${flagPath}`, 'info');
+    } catch (err) {
+        log(`Error setting the restart flag: ${err.message}`, 'error');
+    }
+}
+
+// Function to save certificate files
+async function saveCertificates(collectionName, privateKey, publicCert, chainCert) {
+    try {
+        // Create the directory if it doesn't exist
         if (!fs.existsSync(certificatesPath)) {
             fs.mkdirSync(certificatesPath, { recursive: true });
         }
 
-        // Überprüfen, ob das Skript Schreibberechtigungen für das Zertifikatsverzeichnis hat
+        // Check if the script has write permissions for the certificate directory
         await fs.promises.access(certificatesPath, fs.constants.W_OK);
 
-        // Dateien mit dem Collection-Namen erstellen
+        // Create file paths based on collection name
         const privateKeyPath = path.join(certificatesPath, `${collectionName}_key.pem`);
         const publicCertPath = path.join(certificatesPath, `${collectionName}_cert.pem`);
         const chainCertPath = path.join(certificatesPath, `${collectionName}_chain.pem`);
 
-        // Validierung der Zertifikatsdaten
+        // Validate certificate data
         if (!privateKey.startsWith('-----BEGIN')) {
-            log(`Ungültiger privater Schlüssel für die Collection: ${collectionName}`, 'error');
+            log(`Invalid private key for collection: ${collectionName}`, 'error');
             return;
         }
 
         if (!publicCert.startsWith('-----BEGIN')) {
-            log(`Ungültiges Zertifikat für die Collection: ${collectionName}`, 'error');
+            log(`Invalid certificate for collection: ${collectionName}`, 'error');
             return;
         }
 
-        // Speichern des privaten Schlüssels mit restriktiven Berechtigungen
-        await fs.promises.writeFile(privateKeyPath, privateKey, { mode: 0o640 });
-        log(`Privater Schlüssel gespeichert unter: ${privateKeyPath}`, 'info');
+        // Compare new data with existing files
+        const keyChanged = !(await compareFileContents(privateKeyPath, privateKey));
+        const certChanged = !(await compareFileContents(publicCertPath, publicCert));
+        const chainChanged = chainCert
+            ? !(await compareFileContents(chainCertPath, chainCert.join('\n')))
+            : false;
 
-        // Speichern des Zertifikats
-        await fs.promises.writeFile(publicCertPath, publicCert, { mode: 0o644 });
-        log(`Zertifikat gespeichert unter: ${publicCertPath}`, 'info');
+        // If something has changed, save the files and set the restart flag
+        if (keyChanged || certChanged || chainChanged) {
+            await fs.promises.writeFile(privateKeyPath, privateKey, { mode: 0o640 });
+            log(`Private key saved at: ${privateKeyPath}`, 'info');
 
-        // Falls eine Zertifikatskette vorhanden ist, diese speichern
-        if (chainCert) {
-            // Sicherstellen, dass die Zertifikatskette korrekt formatiert ist
-            const chainData = chainCert.join('\n');
-            await fs.promises.writeFile(chainCertPath, chainData, { mode: 0o644 });
-            log(`Zertifikatskette gespeichert unter: ${chainCertPath}`, 'info');
+            await fs.promises.writeFile(publicCertPath, publicCert, { mode: 0o644 });
+            log(`Certificate saved at: ${publicCertPath}`, 'info');
+
+            if (chainCert) {
+                const chainData = chainCert.join('\n');
+                await fs.promises.writeFile(chainCertPath, chainData, { mode: 0o644 });
+                log(`Certificate chain saved at: ${chainCertPath}`, 'info');
+            }
+
+            // Set the restart flag if certificates were changed
+            setRestartFlag();
         } else {
-            log(`Keine Zertifikatskette für die Collection: ${collectionName} gefunden.`, 'info');
+            log(`No changes detected in the certificates for ${collectionName}.`, 'info');
         }
     } catch (err) {
-        log(`Fehler beim Speichern der Zertifikate für ${collectionName}: ${err.message}`, 'error');
+        log(`Error saving certificates for ${collectionName}: ${err.message}`, 'error');
     }
 }
 
-// Funktion zum Abrufen und Speichern der Zertifikate aus allen Collections
-async function verarbeiteZertifikate() {
+// Function to retrieve and process certificates from all collections
+async function processCertificates() {
     try {
         const obj = await getObjectAsync('system.certificates');
         if (!obj || !obj.native || !obj.native.collections) {
-            log('Fehler: Zertifikatssammlungen konnten nicht abgerufen werden.', 'error');
+            log('Error: Could not retrieve certificate collections.', 'error');
             return;
         }
 
         const collections = obj.native.collections;
 
-        // Alle Collections durchlaufen
+        // Loop through all collections
         for (const collectionName of Object.keys(collections)) {
             const collection = collections[collectionName];
 
             if (collection.key && collection.cert) {
-                // Privater Schlüssel und Zertifikat aus der Collection extrahieren
+                // Extract private key and certificate from the collection
                 const privateKey = collection.key;
                 const publicCert = collection.cert;
 
-                // Zertifikatskette extrahieren, falls vorhanden
+                // Extract certificate chain if available
                 const chainCert = collection.chain ? collection.chain : null;
 
-                // Zertifikate mit dem dynamischen Collection-Namen speichern
-                await speichereZertifikate(collectionName, privateKey, publicCert, chainCert);
+                // Save certificates with dynamic collection name
+                await saveCertificates(collectionName, privateKey, publicCert, chainCert);
             } else {
-                log(`Keine gültigen Zertifikate für die Collection: ${collectionName} gefunden.`, 'info');
+                log(`No valid certificates found for collection: ${collectionName}`, 'info');
             }
         }
     } catch (err) {
-        log(`Fehler beim Abrufen von system.certificates: ${err.message}`, 'error');
+        log(`Error retrieving system certificates: ${err.message}`, 'error');
     }
 }
 
-// Beim Start einmalig die Zertifikate verarbeiten
-verarbeiteZertifikate();
+// Process certificates once at startup
+processCertificates();
 
-// Alle 24 Stunden (täglich um Mitternacht) das Skript erneut ausführen
+// Re-run the script every 24 hours (daily at midnight)
 schedule("0 0 * * *", function () {
-    verarbeiteZertifikate();
+    processCertificates();
 });
