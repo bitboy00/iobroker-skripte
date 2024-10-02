@@ -91,7 +91,7 @@ async function saveCertificates(collectionName, privateKey, publicCert, chainCer
         // Create file paths based on sanitized collection name
         const privateKeyPath = path.join(certificatesPath, `${sanitizedCollectionName}_key.pem`);
         const publicCertPath = path.join(certificatesPath, `${sanitizedCollectionName}_cert.pem`);
-        const chainCertPath = path.join(certificatesPath, `${sanitizedCollectionName}_chain.pem`);
+        const chainCertPath = path.join(certificatesPath, `${sanitizedCollectionName}_fullchain.pem`);
 
         // Validate certificate data
         if (!privateKey.startsWith('-----BEGIN')) {
