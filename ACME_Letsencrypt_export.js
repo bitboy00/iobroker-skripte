@@ -61,7 +61,7 @@ async function setRestartFlag(collectionName) {
         }
 
         // Set the flag as it doesn't exist
-        await fs.writeFile(flagPath, 'restart', { mode: 0o644 });
+        await fs.writeFile(flagPath, 'restart', { mode: 0o666 });
         log(`Restart flag has been set for collection ${collectionName}: ${flagPath}`, 'info');
     } catch (err) {
         log(`Error setting the restart flag for collection ${collectionName}: ${err.message}`, 'error');
@@ -114,7 +114,7 @@ async function saveCertificates(collectionName, privateKey, publicCert, chainCer
         // If something has changed, save the files and set the restart flag
         if (keyChanged || certChanged || chainChanged) {
             if (keyChanged) {
-                await fs.writeFile(privateKeyPath, privateKey, { mode: 0o640 });
+                await fs.writeFile(privateKeyPath, privateKey, { mode: 0o644 });
                 log(`Private key saved at: ${privateKeyPath}`, 'info');
             }
 
